@@ -1,0 +1,17 @@
+UPDATE OpenIddictApplications
+set RedirectUris='["http://localhost:5173/auth/callback"]' WHERE id='a2195aa5-afa3-406d-a3e8-d9b160e70f43'
+
+UPDATE dbo.OpenIddictApplications
+SET Permissions =
+'[
+  "ept:authorization",
+  "ept:token",
+  "gt:authorization_code",
+  "gt:refresh_token",
+  "rst:code",
+  "scp:openid",
+  "scp:profile",
+  "scp:email",
+  "scp:offline_access"
+]'
+WHERE Id = 'a2195aa5-afa3-406d-a3e8-d9b160e70f43';

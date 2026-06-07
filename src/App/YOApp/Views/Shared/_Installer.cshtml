@@ -1,0 +1,45 @@
+﻿@using YangOne.Web.Security
+@using YangOne.Web.Optimizer
+@using Microsoft.AspNetCore.Identity
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@addTagHelper *, YangOne.Web
+@inject IYOBundler bundler
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Yang One Framework Installer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="mask-icon" href="favicon.svg" color="#1F9984">
+
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+          theme: {
+            extend: {
+              fontFamily: {
+                sans: ['Plus Jakarta Sans', 'sans-serif'],
+              },
+              colors: {
+                brand: {
+                  red: '#bf2e2e',
+                  dark: '#0f172a',
+                  gray: '#f8fafc'
+                }
+              },
+              animation: {
+                'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              }
+            }
+          }
+        }
+    </script>
+    <style href="/assets/js/install/installer.css"></style>
+</head>
+<body class="antialiased h-screen w-screen overflow-hidden bg-slate-50">
+    <div id="root" class="h-full w-full"></div>
+    <script type="module" src="/assets/js/install/installer.js"></script>
+</body>
+</html>

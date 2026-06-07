@@ -1,0 +1,7 @@
+VITE_API_BASE_URL="https://aiapi.yoframework.com"
+VITE_API_PATH='/api/v1/'
+VITE_CDN_PATH="https://aiapi.yoframework.com"
+VITE_IDENTITY_SERVER="https://aiapi.yoframework.com"
+VITE_API_SERVER="https://aiapi.yoframework.com"
+VITE_API_CLIENTID="test-client"
+VITE_API_SECRET="test-secret"

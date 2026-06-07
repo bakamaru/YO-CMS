@@ -1,0 +1,39 @@
+trigger:
+- production
+
+pool:
+  name: 'Azure Pipelines'
+  vmImage: ubuntu-latest
+
+steps:
+- task: NodeTool@0
+  inputs:
+    versionSpec: '20.x'
+  displayName: 'Install Node.js'
+
+- task: DownloadSecureFile@1
+  name: DownloadKachuwaConfig
+  inputs:
+    secureFile: 'pm_prod.env'
+
+# Run the shell script if the agent is Linux
+- script: bash replace_config_file_contents.sh "$(DownloadKachuwaConfig.secureFilePath)" "$(Build.SourcesDirectory)/.env"
+  displayName: 'Replace Config on Linux'
+  condition: eq( variables['Agent.OS'], 'Linux' )
+
+# Run the batch file if the agent is Windows
+- script: replace_config_file_contents.bat "$(DownloadKachuwaConfig.secureFilePath)" "$(Build.SourcesDirectory)/.env"
+  displayName: 'Replace Config on Windows'
+  condition: eq( variables['Agent.OS'], 'Windows_NT' )
+
+- script: |
+    npm install
+    npm run build
+  displayName: 'npm install and build'
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: 'dist'        
+    ArtifactName: 'drop'         
+    publishLocation: 'Container'
+  displayName: 'Publish dist folder as build artifact'  
