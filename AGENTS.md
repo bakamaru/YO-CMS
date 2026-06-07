@@ -666,7 +666,130 @@ await new CrudService<T>().UpdateStatusByColumnName(id, status, "ColumnName");
 
 ---
 
-## 16. Known Gaps / Placeholders
+## 16. AppEvent Outbox System
+
+The framework includes a SQL Outbox-based event system for reliable, asynchronous event processing.
+
+### Architecture
+```
+Business Service → IAppEventPublisher.PublishAsync() → SQL Outbox → Worker → Processor → Notification Engine
+```
+
+### Interfaces (YangOne.Core/AppEvent/)
+| Interface | Purpose |
+|-----------|---------|
+| `IAppEventPublisher` | Business-facing publish API |
+| `IOutboxEventStore` | Outbox table persistence (Dapper) |
+| `IAppEventProcessor` | Processes a single outbox event |
+| `IExternalEventTransport` | Future abstraction for RabbitMQ/Kafka |
+
+### DTOs (YangOne.Core/AppEvent/Dto/)
+| DTO | Purpose |
+|-----|---------|
+| `OutboxEventCreateDto` | Input for creating an outbox row |
+| `OutboxEventDto` | Read-model returned by the store |
+
+### SQL Outbox Table: `AppEventOutbox`
+- **Statuses**: Pending → Processing → Completed / Failed / DeadLetter
+- **Idempotency**: Unique filtered index on `IdempotencyKey WHERE IS NOT NULL`
+- **Locking**: `READPAST, UPDLOCK, ROWLOCK` hints for multi-worker safety
+- **Retry**: Exponential backoff via `RetryCount` / `MaxRetryCount` / `NextRetryOn`
+- **Indexes**: Composite index on `(Status, NextRetryOn, Priority, AddedOn)`
+
+### Workers (YangOne.Web/AppEvent/)
+| Class | Role |
+|-------|------|
+| `AppEventOutboxWorker` | `BackgroundService` polling every 5s, batch size 50 |
+| `NotificationAppEventProcessor` | Routes events to `INotificationRuleEngine` → `INotificationDispatcher` |
+| `DirectSqlOutboxEventTransport` | Default `IExternalEventTransport` — direct processor call |
+
+### Write-side flow
+```csharp
+await _appEventPublisher.PublishAsync(
+    eventKey: "User.SignupCompleted",
+    actorUserId: userId,
+    payload: new { UserId = userId, FullName = user.FullName, Email = user.Email });
+```
+
+### Event Key Convention
+Format: `Module.ActionState`
+```
+User.SignupCompleted, Order.Created, Payment.Success, Ticket.Assigned, Subscription.ExpiringSoon
+```
+
+### Registration (auto-discovered via Bootstrapper)
+- `AppEventDataRegistrar` — `IOutboxEventStore` + `IAppEventPublisher` (scoped)
+- `AppEventWebRegistrar` — `IAppEventProcessor` + `IExternalEventTransport` + hosted worker
+
+### Future Migrations
+Swap `IAppEventPublisher` registration for RabbitMQ/Kafka without touching business code.
+
+## 17. Notification Management System
+
+The framework includes a comprehensive notification management system with admin UI support.
+
+### Architecture
+```
+Business Service → IAppEventPublisher.PublishAsync() → SQL Outbox → Worker → Rule Engine → Dispatcher → Channels (Email, SMS, Push, InApp, WhatsApp)
+```
+
+### Database Tables
+| Table | Purpose |
+|-------|---------|
+| `NotificationEvent` | Event definitions (EventKey, Name, Module, SamplePayload) |
+| `NotificationTemplate` | Message templates per channel/language (Subject, Body, Variables) |
+| `NotificationRule` | Rules linking events to recipients/channels/templates |
+| `NotificationRuleRecipient` | Recipient definitions (ActorUser, Role, SpecificUser, etc.) |
+| `NotificationRuleChannel` | Channel + Template mappings per rule |
+| `NotificationSendLog` | Audit log of all send attempts |
+| `NotificationPreference` | User channel preferences + quiet hours |
+| `NotificationInbox` | User-facing in-app notifications |
+
+### Services (YangOne.Web.Service.Notification)
+| Service | Interface | Purpose |
+|---------|-----------|---------|
+| `NotificationEventService` | `INotificationEventService` | CRUD for events |
+| `NotificationTemplateService` | `INotificationTemplateService` | CRUD + preview/validate templates |
+| `NotificationRuleService` | `INotificationRuleService` | CRUD + condition eval + recipient preview |
+
+### API Controllers (YangOne.Web.API)
+| Controller | Route | Purpose |
+|------------|-------|---------|
+| `NotificationAdminApiController` | `/api/admin/notifications` | Dashboard |
+| `NotificationEventsApiController` | `/api/admin/notification-events` | Event CRUD + test trigger |
+| `NotificationTemplatesApiController` | `/api/admin/notification-templates` | Template CRUD + preview/validate/clone |
+| `NotificationRulesApiController` | `/api/admin/notification-rules` | Rule CRUD + condition eval + recipient preview |
+| `NotificationManualSendApiController` | `/api/admin/notifications` | Manual send / trigger event / send template |
+| `NotificationLogsApiController` | `/api/admin/notification-logs` | Send logs + retry |
+| `NotificationInboxApiController` | `/api/admin/notification-inbox` | Admin inbox view |
+| `NotificationUserApiController` | `/api/notifications` | User inbox + preferences |
+| `NotificationPreferencesApiController` | `/api/admin/notification-preferences` + `/api/notifications/preferences` | Admin/user preferences |
+
+### Event Key Convention
+Format: `Module.ActionState`
+```
+User.SignupCompleted, User.LoginSuccess, Order.CheckoutCompleted, Payment.Success, Ticket.Created
+```
+
+### Template Variables
+Use `{{VariableName}}` syntax in subject/body. Variables extracted from event payload JSON.
+
+### Admin UI Screens (MVP Priority)
+1. **Events** - List/create/edit events, test trigger
+2. **Templates** - Editor with live preview + variable validation
+3. **Rules** - Wizard: Event → Conditions → Recipients → Channels/Templates → Preview
+4. **Manual Send** - Direct message / Trigger event / Use template
+5. **Logs** - Filterable send history with retry
+6. **Failed Outbox** - Dead letter queue management
+7. **User Inbox** - Admin view of user notifications
+8. **Preferences** - Channel/quiet hours management
+9. **Dashboard** - Overview cards + recent activity
+
+### Registration (auto-discovered via Bootstrapper)
+- `NotificationServiceRegistrar` — Core services (Event, Template, Rule)
+- `AppEventWebRegistrar` — RuleEngine, Dispatcher, Processor, Transport, Worker
+
+## 18. Known Gaps / Placeholders
 
 | Item | File | Status |
 |------|------|--------|
@@ -708,3 +831,11 @@ await new CrudService<T>().UpdateStatusByColumnName(id, status, "ColumnName");
 | `YangOne.Web/KachuwaWebServiceRegistrar.cs` | Web framework DI setup |
 | `YangOne.Identity/Stores/KachuwaUserStore.cs` | Custom Identity user store |
 | `YangOne.Identity/Stores/KachuwaRoleStore.cs` | Custom Identity role store |
+| `YangOne.Core/AppEvent/IAppEventPublisher.cs` | Event publishing abstraction |
+| `YangOne.Core/AppEvent/IOutboxEventStore.cs` | Outbox persistence contract |
+| `YangOne.Core/AppEvent/IAppEventProcessor.cs` | Event processing contract |
+| `YangOne.Core/AppEvent/IExternalEventTransport.cs` | Future transport abstraction |
+| `YangOne.Data/AppEvent/SqlOutboxEventStore.cs` | Dapper outbox repository |
+| `YangOne.Data/AppEvent/SqlOutboxAppEventPublisher.cs` | Default SQL outbox publisher |
+| `YangOne.Web/AppEvent/AppEventOutboxWorker.cs` | Background worker polling outbox |
+| `YangOne.Web/AppEvent/NotificationAppEventProcessor.cs` | Routes events to notification engine |
